@@ -76,7 +76,7 @@ function(make_clapfirst_plugins)
         set(C1ST_PLUGIN_FORMATS CLAP VST3 AUV2)
     endif()
 
-    if (EMSCRIPTEN)
+    if (EMSCRIPTEN OR (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "wasm32") OR (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "wasm64"))
         set(BUILD_CLAP -1)
         set(BUILD_VST3 -1)
         set(BUILD_AUV2 -1)
@@ -210,7 +210,7 @@ function(make_clapfirst_plugins)
     endif()
 
     if (${BUILD_WCLAP} GREATER -1)
-        message(STATUS "clap-wrapper: ClapFirst is making a WCLAP (with Emscripten)")
+        message(STATUS "clap-wrapper: ClapFirst is making a WCLAP")
         set(WCLAP_TARGET ${C1ST_TARGET_NAME}_wclap)
         add_executable(${WCLAP_TARGET} ${C1ST_ENTRY_SOURCE})
         target_link_libraries(${WCLAP_TARGET} PRIVATE ${C1ST_IMPL_TARGET})
@@ -229,11 +229,15 @@ function(make_clapfirst_plugins)
             endif()
         endif()
 
-        # Emscripten flags
-        set_target_properties(${WCLAP_TARGET} PROPERTIES
-                COMPILE_FLAGS "-msimd128" # TODO: add this to the static library as well?
-                LINK_FLAGS    "-msimd128 -sSTANDALONE_WASM --no-entry -s EXPORTED_FUNCTIONS=_clap_entry,_malloc -s INITIAL_MEMORY=512kb -s ALLOW_MEMORY_GROWTH=1 -s ALLOW_TABLE_GROWTH=1 -s PURE_WASI --export-table"
-        )
+        if (EMSCRIPTEN)
+            target_compile_options(${C1ST_IMPL_TARGET} PUBLIC -msimd128 --no-entry)
+            target_compile_options(${WCLAP_TARGET} PUBLIC -msimd128 --no-entry)
+            target_link_options(${WCLAP_TARGET} PUBLIC -msimd128 -sSTANDALONE_WASM --no-entry -sEXPORTED_FUNCTIONS=_clap_entry,_malloc -sINITIAL_MEMORY=512kb -sALLOW_MEMORY_GROWTH=1 -sALLOW_TABLE_GROWTH=1 -sPURE_WASI --export-table)
+        else()
+            target_compile_options(${C1ST_IMPL_TARGET} PUBLIC -msimd128 -fno-exceptions)
+            target_compile_options(${WCLAP_TARGET} PUBLIC -msimd128 -fno-exceptions)
+            target_link_options(${WCLAP_TARGET} PUBLIC -mexec-model=reactor -Wl,--max-memory=4294967296,--export-table,--growable-table,--export=malloc,--export=clap_entry)
+        endif()
 
         add_dependencies(${ALL_TARGET} ${WCLAP_TARGET})
     endif()
