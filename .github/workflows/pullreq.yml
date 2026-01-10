@@ -262,8 +262,8 @@ jobs:
 
       - name: Run VST3 validator
         run: |
-          VST3_PATH=$(find build -name "ClapFirst Bad Distortion.vst3" -print)
-          ./vst3sdk/cmake-build/bin/validator $VST3_PATH
+          VST3_PATH=$(find build -name "ClapFirst Bad Distortion.vst3" -print)"
+          ./vst3sdk/cmake-build/bin/validator "$VST3_PATH
 
       - name: Run auval
         if: ${{ matrix.run_auval }}
@@ -271,7 +271,7 @@ jobs:
           AUV2_PATH=$(find build -name "ClapFirst Bad Distortion.component" -print)
 
           mkdir -p ~/Library/Audio/Plug-Ins/Components/
-          cp -R $AUV2_PATH ~/Library/Audio/Plug-Ins/Components/
+          cp -R "$AUV2_PATH" ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
           auval -strict -v aufx BdDt FrAD
           
