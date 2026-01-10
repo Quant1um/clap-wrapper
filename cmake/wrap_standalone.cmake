@@ -5,6 +5,7 @@ function(target_add_standalone_wrapper)
             OUTPUT_NAME
             BUNDLE_IDENTIFIER
             BUNDLE_VERSION
+            RESOURCE_DIRECTORY
 
             PLUGIN_INDEX
             PLUGIN_ID
@@ -44,6 +45,10 @@ function(target_add_standalone_wrapper)
 
     if (NOT DEFINED SA_MACOS_ICON)
         set(SA_MACOS_ICON "")
+    endif()
+
+    if (NOT DEFINED SA_RESOURCE_DIRECTORY)
+        set(SA_RESOURCE_DIRECTORY "")
     endif()
 
     guarantee_rtaudio()
@@ -174,7 +179,7 @@ function(target_add_standalone_wrapper)
             target_compile_definitions(${salib} PUBLIC CLAP_WRAPPER_HAS_GTK3)
             target_sources(${salib} PRIVATE ${CLAP_WRAPPER_CMAKE_CURRENT_SOURCE_DIR}/src/detail/standalone/linux/gtkutils.cpp)
         else()
-            message(STATUS "clap-wrapper: can't find gtkmm-3.0; no ui in standalone")
+            message(WARNING "clap-wrapper: can't find gtkmm-3.0; no ui in standalone")
         endif()
 
         set_target_properties(${SA_TARGET} PROPERTIES OUTPUT_NAME ${SA_OUTPUT_NAME})
@@ -182,6 +187,11 @@ function(target_add_standalone_wrapper)
     else()
         target_sources(${SA_TARGET} PRIVATE
                 ${CLAP_WRAPPER_CMAKE_CURRENT_SOURCE_DIR}/src/wrapasstandalone.cpp)
+    endif()
+
+    # Copy resource directory, if defined
+    if(NOT SA_RESOURCE_DIRECTORY STREQUAL "")
+        message(WARNING "RESOURCE_DIRECTORY defined, but not (yet) supported for standalone")
     endif()
 
     if (DEFINED SA_HOSTED_CLAP_NAME)
