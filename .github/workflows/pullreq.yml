@@ -265,8 +265,8 @@ jobs:
         shell: bash
         run: |
           VST3_PATH=$(find build -name "ClapFirst Bad Distortion.vst3" -print)
-          ./vst3sdk/cmake-build/bin/validator "$VST3_PATH"
-
+          VALIDATOR_PATH=$(find vst3sdk/cmake-build/bin -name "validator*" -print)
+          "$VALIDATOR_PATH" "$VST3_PATH"
       - name: Run auval
         shell: bash
         if: ${{ matrix.run_auval }}
