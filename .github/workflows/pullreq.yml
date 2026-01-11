@@ -204,24 +204,47 @@ jobs:
             cmakeargs: -A x64
             install_ninja: false
             run_aptget: false
-            name: ClapFirst Windows 64bit MSVC
+            run_validator: false
+            vst3_validator: build/validator-build/bin/validator
+            vst3_path: ./build/clap-first-distortion_assets/VST3/ClapFirst Bad Distortion.vst3
+            name: ClapFirst Windows 64bit Single File MSVC
+
+
+          - os: windows-latest
+            cmakeargs: -A x64 -DEXAMPLE_USE_WINDOWS_FOLDER=TRUE
+            install_ninja: false
+            run_aptget: false
+            run_validator: true
+            vst3_validator: build/validator-build/bin/validator
+            vst3_path: ./build/clap-first-distortion_assets/VST3/ClapFirst Bad Distortion.vst3
+            name: ClapFirst Windows 64bit Folder MSVC
 
           - os: ubuntu-latest
             cmakeargs: -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_C_COMPILER=gcc-12
             install_ninja: false
             run_aptget: true
+            run_validator: true
+            vst3_validator: build/validator-build/bin/Debug/validator
+            vst3_path: ./build/clap-first-distortion_assets/ClapFirst Bad Distortion.vst3
             name: ClapFirst Linux gcc12
 
           - os: ubuntu-24.04
             cmakeargs: -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_C_COMPILER=gcc-14
             install_ninja: false
             run_aptget: true
+            run_validator: true
+            vst3_validator: build/validator-build/bin/Debug/validator
+            vst3_path: ./build/clap-first-distortion_assets/ClapFirst Bad Distortion.vst3
             name: ClapFirst Linux ub24 gcc14
 
           - os: macos-latest
             cmakeargs: -G"Xcode"
-            install_ninja: false
+            install_ninja: true
             run_aptget: false
+            run_validator: true
+            vst3_validator: build/validator-build/bin/Debug/validator
+            vst3_path: ./build/clap-first-distortion_assets/Debug/ClapFirst Bad Distortion.vst3
+            auv2_path: ./build/clap-first-distortion_assets/Debug/ClapFirst Bad Distortion.component
             name: ClapFirst MacOS Xcode
 
 
@@ -252,5 +275,26 @@ jobs:
         shell: bash
         run: |
           find build -name "ClapFirst*" -print
+
+      - name: Build VST3 validator
+        if: ${{ matrix.run_validator}}
+        shell: bash
+        run: |
+          cmake --build ./build --config Debug --target vst3_validator
+
+      - name: Run VST3 validator
+        shell: bash
+        if: ${{ matrix.run_validator}}
+        run: |
+          "${{ matrix.vst3_validator }}" "${{ matrix.vst3_path }}"
+
+      - name: Run auval
+        shell: bash
+        if: ${{ matrix.auv2_path }}
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components/
+          cp -R "${{ matrix.auv2_path }}" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -strict -v aufx BdDt FrAD
           
 
