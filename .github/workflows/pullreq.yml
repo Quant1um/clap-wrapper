@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - next
+  workflow_dispatch:
 
 jobs:
   build_feature:
@@ -192,7 +193,7 @@ jobs:
             install_ninja: false
             run_aptget: false
             vst3_validator: ./vst3sdk/cmake-build/bin/Debug/validator
-            vst3_path: ./build/clap-first-distortion_assets/VST3/ClapFirst Bad Distortion.vst3
+            vst3_path: ./build/clap-first-distortion_assets/VST3/Debug/ClapFirst Bad Distortion.vst3
             name: ClapFirst Windows 64bit MSVC
 
           - os: ubuntu-latest
