@@ -254,7 +254,7 @@ jobs:
         shell: bash
         run: |
           # checkout VST3 SDK (shallow clone), can we reuse one from the build step?
-          git clone --revision=05c4a9763f311a58fe3f34b68a199e5eea92e2b4 --depth=1 https://github.com/steinbergmedia/vst3sdk
+          git clone --revision=7d92338ae922db2d559ac458824a4df40f37e82e --depth=1 https://github.com/steinbergmedia/vst3sdk
           cd vst3sdk
           git submodule update --init base
           git submodule update --init cmake
