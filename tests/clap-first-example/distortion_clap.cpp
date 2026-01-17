@@ -55,53 +55,41 @@ typedef struct
   float mix;
   int32_t mode;
 
-  uint32_t layout;
+  uint32_t channels;
 } clap1st_distortion_plug;
 
 static void clap1stDist_process_event(clap1st_distortion_plug *plug, const clap_event_header_t *hdr);
 
-/////////////////////////////
-// clap_audio_ports_config //
-/////////////////////////////
+///////////////////////////////////
+// clap_configurable_audio_ports //
+///////////////////////////////////
 
-// stereo, mono, quad
-const int LAYOUTS_CHANNELS[] = {2, 1, 4};
-const char *LAYOUTS_TYPES[] = {CLAP_PORT_STEREO, CLAP_PORT_MONO, nullptr};
-
-static uint32_t clap1stDist_audio_ports_config_count(const clap_plugin_t *plugin)
+static bool clap1stDist_can_apply_configuration(
+    const clap_plugin_t *plugin, const struct clap_audio_port_configuration_request *requests,
+    uint32_t request_count)
 {
-  return 3;
-}
+  if (request_count != 2) return false;  // one request for input, one for output
+  if (requests[0].is_input == requests[1].is_input) return false;
+  if (requests[0].port_index != 0 || requests[1].port_index != 0) return false;
+  if (requests[0].channel_count != requests[1].channel_count) return false;
 
-static bool clap1stDist_audio_ports_config_get(const clap_plugin_t *plugin, uint32_t index,
-                                               clap_audio_ports_config_t *info)
-{
-  if (index > 2) return false;
-
-  info->id = index;
-  info->input_port_count = 1;
-  info->output_port_count = 1;
-  info->has_main_input = true;
-  info->has_main_output = true;
-  info->main_input_channel_count = LAYOUTS_CHANNELS[index];
-  info->main_output_channel_count = LAYOUTS_CHANNELS[index];
-  info->main_input_port_type = LAYOUTS_TYPES[index];
-  info->main_output_port_type = LAYOUTS_TYPES[index];
-  snprintf(info->name, sizeof(info->name), "Layout %d", index);
   return true;
 }
 
-static bool clap1stDist_audio_ports_config_select(const clap_plugin_t *plugin, clap_id config_id)
+static bool clap1stDist_apply_configuration(const clap_plugin_t *plugin,
+                                            const struct clap_audio_port_configuration_request *requests,
+                                            uint32_t request_count)
 {
+  if (!clap1stDist_can_apply_configuration(plugin, requests, request_count)) return false;
   auto *plug = (clap1st_distortion_plug *)plugin->plugin_data;
-  if (config_id > 2) return false;
-  plug->layout = config_id;
+  plug->channels = requests[0].channel_count;
   return true;
 }
 
-static clap_plugin_audio_ports_config_t s_clap1stDist_audio_ports_config = {
-    clap1stDist_audio_ports_config_count, clap1stDist_audio_ports_config_get,
-    clap1stDist_audio_ports_config_select};
+static clap_plugin_configurable_audio_ports_t s_clap1stDist_configurable_audio_ports = {
+    clap1stDist_can_apply_configuration,
+    clap1stDist_apply_configuration,
+};
 
 //////////////////////
 // clap_audio_ports //
@@ -126,8 +114,8 @@ static bool clap1stDist_audio_ports_get(const clap_plugin_t *plugin, uint32_t in
     snprintf(info->name, sizeof(info->name), "%s", "Distorted Output");
   info->flags = CLAP_AUDIO_PORT_IS_MAIN;
   info->in_place_pair = CLAP_INVALID_ID;
-  info->port_type = LAYOUTS_TYPES[plug->layout];
-  info->channel_count = LAYOUTS_CHANNELS[plug->layout];
+  info->channel_count = plug->channels;
+  info->port_type = nullptr;
   return true;
 }
 
@@ -344,7 +332,7 @@ static bool clap1stDist_init(const struct clap_plugin *plugin)
 
   // Fetch host's extensions here
   plug->hostLog = (const clap_host_log_t *)plug->host->get_extension(plug->host, CLAP_EXT_LOG);
-  plug->layout = 0;  // default to stereo
+  plug->channels = 2;  // default to stereo
 
   plug->drive = 0.f;
   plug->mix = 0.5f;
@@ -449,7 +437,7 @@ static clap_process_status clap1stDist_process(const struct clap_plugin *plugin,
     }
 
     assert(process->audio_inputs[0].channel_count == process->audio_outputs[0].channel_count);
-    assert(process->audio_inputs[0].channel_count == LAYOUTS_CHANNELS[plug->layout]);
+    assert(process->audio_inputs[0].channel_count == plug->channels);
 
     /* process every samples until the next event */
     for (int j = 0; j < process->audio_inputs[0].channel_count; ++j)
@@ -495,7 +483,7 @@ static clap_process_status clap1stDist_process(const struct clap_plugin *plugin,
 
 static const void *clap1stDist_get_extension(const struct clap_plugin *plugin, const char *id)
 {
-  if (!strcmp(id, CLAP_EXT_AUDIO_PORTS_CONFIG)) return &s_clap1stDist_audio_ports_config;
+  if (!strcmp(id, CLAP_EXT_CONFIGURABLE_AUDIO_PORTS)) return &s_clap1stDist_configurable_audio_ports;
   if (!strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &s_clap1stDist_audio_ports;
   if (!strcmp(id, CLAP_EXT_PARAMS)) return &s_clap1stDist_params;
   if (!strcmp(id, CLAP_EXT_STATE)) return &s_clap1stDist_state;

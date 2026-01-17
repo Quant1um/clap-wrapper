@@ -220,7 +220,6 @@ void Plugin::connectClap(const clap_plugin_t* clap)
   getExtension(_plugin, _ext._audioports, CLAP_EXT_AUDIO_PORTS);
   getExtension(_plugin, _ext._audioportsactivation, CLAP_EXT_AUDIO_PORTS_ACTIVATION);
   getExtension(_plugin, _ext._configaudioports, CLAP_EXT_CONFIGURABLE_AUDIO_PORTS);
-  getExtension(_plugin, _ext._audioportsconfig, CLAP_EXT_AUDIO_PORTS_CONFIG);
   getExtension(_plugin, _ext._noteports, CLAP_EXT_NOTE_PORTS);
   getExtension(_plugin, _ext._latency, CLAP_EXT_LATENCY);
   getExtension(_plugin, _ext._render, CLAP_EXT_RENDER);
@@ -525,7 +524,7 @@ void Plugin::param_request_flush()
 // [thread-safe]
 const void* Plugin::clapExtension(const clap_host* /*host*/, const char* extension)
 {
-  // TODO: add 'audio-ports' and 'audio-ports-config' host-side extensions
+  // TODO: add 'audio-ports' host-side extension
   if (!strcmp(extension, CLAP_EXT_LOG)) return &HostExt::log;
   if (!strcmp(extension, CLAP_EXT_PARAMS)) return &HostExt::params;
   if (!strcmp(extension, CLAP_EXT_THREAD_CHECK)) return &HostExt::threadcheck;

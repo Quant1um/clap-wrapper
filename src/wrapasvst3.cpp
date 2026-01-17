@@ -21,6 +21,7 @@
 #include "detail/vst3/process.h"
 #include "detail/vst3/parameter.h"
 #include "detail/clap/fsutil.h"
+#include "detail/shared/util.h"
 #include <locale>
 #include <sstream>
 
@@ -64,18 +65,6 @@ struct ClapHostExtensions
   const clap_host_state_t _state = {mark_dirty};
 };
 #endif
-
-// is there a better way?
-uint32_t popcount64(uint64_t x)
-{
-  uint32_t count = 0;
-  while (x)
-  {
-    x &= (x - 1);
-    count++;
-  }
-  return count;
-}
 
 void utf8_to_utf16l(const char* utf8string, uint16_t* target, size_t targetsize)
 {
@@ -380,52 +369,30 @@ tresult PLUGIN_API ClapAsVst3::setBusArrangements(Vst::SpeakerArrangement* input
   // if we have configurable-audio-ports, ask the plugin to set the requested arrangement
   if (_plugin->_ext._configaudioports)
   {
-    std::vector<clap_audio_port_configuration_request_t> requests(numIns + numOuts);
+    std::vector<clap_audio_port_configuration_request_t> requests;
 
-    for (int i = 0; i < numIns; ++i)
+    for (int i = 0; i < numIns + numOuts; ++i)
     {
       clap_audio_port_configuration_request_t request;
 
-      request.is_input = true;
-      request.port_index = i;
-      request.channel_count = popcount64(inputs[i]);
-      switch (request.channel_count)
+      request.is_input = i < numIns;
+      request.port_index = i < numIns ? i : (i - numIns);
+      auto arrangement = i < numIns ? inputs[i] : outputs[i - numIns];
+
+      switch (arrangement)
       {
-        case 1:
+        case Vst::SpeakerArr::kMono:
+          request.channel_count = 1;
           request.port_type = CLAP_PORT_MONO;
           request.port_details = nullptr;
           break;
-        case 2:
+        case Vst::SpeakerArr::kStereo:
+          request.channel_count = 2;
           request.port_type = CLAP_PORT_STEREO;
           request.port_details = nullptr;
           break;
         default:
-          request.port_type = nullptr;
-          request.port_details = nullptr;
-          break;
-      }
-
-      requests.push_back(request);
-    }
-
-    for (int i = 0; i < numOuts; ++i)
-    {
-      clap_audio_port_configuration_request_t request;
-
-      request.is_input = false;
-      request.port_index = i;
-      request.channel_count = popcount64(outputs[i]);
-      switch (request.channel_count)
-      {
-        case 1:
-          request.port_type = CLAP_PORT_MONO;
-          request.port_details = nullptr;
-          break;
-        case 2:
-          request.port_type = CLAP_PORT_STEREO;
-          request.port_details = nullptr;
-          break;
-        default:
+          request.channel_count = popcount64(arrangement);
           request.port_type = nullptr;
           request.port_details = nullptr;
           break;
@@ -440,53 +407,6 @@ tresult PLUGIN_API ClapAsVst3::setBusArrangements(Vst::SpeakerArrangement* input
       setupAudioBusses(_plugin->_plugin, _plugin->_ext._audioports);
       return super::setBusArrangements(inputs, numIns, outputs, numOuts);
     }
-  }
-
-  // next, try audio-ports-config extension
-  if (_plugin->_ext._audioportsconfig)
-  {
-    uint32_t count = _plugin->_ext._audioportsconfig->count(_plugin->_plugin);
-    for (uint32_t i = 0; i < count; ++i)
-    {
-      clap_audio_ports_config_t config;
-      if (!_plugin->_ext._audioportsconfig->get(_plugin->_plugin, i, &config)) continue;
-      if (config.input_port_count != static_cast<uint32_t>(numIns)) continue;
-      if (config.output_port_count != static_cast<uint32_t>(numOuts)) continue;
-      if (!_plugin->_ext._audioportsconfig->select(_plugin->_plugin, config.id)) continue;
-
-      bool matches = true;
-      for (int i = 0; i < numIns; ++i)
-      {
-        clap_audio_port_info_t info;
-        _plugin->_ext._audioports->get(_plugin->_plugin, i, true, &info);
-        if (popcount64(inputs[i]) != info.channel_count) matches = false;
-      }
-
-      for (int i = 0; i < numOuts; ++i)
-      {
-        clap_audio_port_info_t info;
-        _plugin->_ext._audioports->get(_plugin->_plugin, i, false, &info);
-        if (popcount64(outputs[i]) != info.channel_count) matches = false;
-      }
-
-      if (matches)
-      {
-        setupAudioBusses(_plugin->_plugin, _plugin->_ext._audioports);
-        super::setBusArrangements(inputs, numIns, outputs, numOuts);
-        return kResultTrue;
-      }
-    }
-
-    // set to default configuration
-    clap_audio_ports_config_t config;
-    if (count > 0 && _plugin->_ext._audioportsconfig->get(_plugin->_plugin, 0, &config))
-    {
-      _plugin->_ext._audioportsconfig->select(_plugin->_plugin, config.id);
-    }
-
-    // no matching configuration found, update the arrangements to the default one and fail
-    setupAudioBusses(_plugin->_plugin, _plugin->_ext._audioports);
-    return kResultFalse;
   }
 
   // otherwise we just make sure that the requested arrangements matches the current layout
@@ -789,6 +709,7 @@ ARAPlugInExtensionInstancePtr PLUGIN_API ClapAsVst3::bindToDocumentControllerWit
   return nullptr;
 }
 
+// TODO: surround extension support
 static Vst::SpeakerArrangement speakerArrFromPortType(const char* port_type, uint32_t channel_count)
 {
   if (!port_type)
