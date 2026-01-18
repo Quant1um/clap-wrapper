@@ -2,7 +2,10 @@
 #pragma once
 
 #include <cstdint>
+
+#if __cplusplus >= 202002L
 #include <bit>
+#endif
 
 uint32_t popcount64(uint64_t x)
 {
