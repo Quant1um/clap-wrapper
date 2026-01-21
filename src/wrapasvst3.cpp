@@ -183,7 +183,7 @@ tresult PLUGIN_API ClapAsVst3::setActive(TBool state)
     if (_active) return kResultFalse;
     if (!_plugin->activate()) return kResultFalse;
     _active = true;
-    _processAdapter = new Clap::ProcessAdapter();
+    _processAdapter = std::make_unique<Clap::ProcessAdapter>();
 
     auto supportsnoteexpression =
         (_expressionmap & clap_supported_note_expressions::AS_VST3_NOTE_EXPRESSION_PRESSURE);
@@ -213,7 +213,6 @@ tresult PLUGIN_API ClapAsVst3::setActive(TBool state)
       _plugin->deactivate();
     }
     _active = false;
-    delete _processAdapter;
     _processAdapter = nullptr;
   }
   return super::setActive(state);
