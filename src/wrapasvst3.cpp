@@ -183,7 +183,7 @@ tresult PLUGIN_API ClapAsVst3::setActive(TBool state)
     if (_active) return kResultFalse;
     if (!_plugin->activate()) return kResultFalse;
     _active = true;
-    _processAdapter = new Clap::ProcessAdapter();
+    _processAdapter = std::make_unique<Clap::ProcessAdapter>();
 
     auto supportsnoteexpression =
         (_expressionmap & clap_supported_note_expressions::AS_VST3_NOTE_EXPRESSION_PRESSURE);
@@ -213,7 +213,6 @@ tresult PLUGIN_API ClapAsVst3::setActive(TBool state)
       _plugin->deactivate();
     }
     _active = false;
-    delete _processAdapter;
     _processAdapter = nullptr;
   }
   return super::setActive(state);
@@ -409,7 +408,7 @@ IPlugView* PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
     clearContextMenu();
     if (_wrappedview == nullptr)
     {
-      _wrappedview = new WrappedView(
+      _wrappedview = std::make_unique<WrappedView>(
           _plugin->_plugin, _plugin->_ext._gui, [this]() { clearContextMenu(); },
           [this](bool everCreated)
           {
@@ -437,7 +436,8 @@ IPlugView* PLUGIN_API ClapAsVst3::createView(FIDString /*name*/)
 #endif
           });
     }
-    return _wrappedview;
+
+    return _wrappedview.get();
   }
   return nullptr;
 }
@@ -1598,12 +1598,12 @@ bool ClapAsVst3::context_menu_populate(const clap_context_menu_target_t* target,
 
   if (target->kind == CLAP_CONTEXT_MENU_TARGET_KIND_GLOBAL)
   {
-    this->vst3ContextMenu = componentHandler3->createContextMenu(this->_wrappedview, nullptr);
+    this->vst3ContextMenu = componentHandler3->createContextMenu(_wrappedview.get(), nullptr);
   }
   if (target->kind == CLAP_CONTEXT_MENU_TARGET_KIND_PARAM)
   {
     vst3ContextMenuParamID = target->id;
-    vst3ContextMenu = componentHandler3->createContextMenu(_wrappedview, &vst3ContextMenuParamID);
+    vst3ContextMenu = componentHandler3->createContextMenu(_wrappedview.get(), &vst3ContextMenuParamID);
   }
   if (vst3ContextMenu)
   {
