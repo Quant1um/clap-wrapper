@@ -517,7 +517,7 @@ class WrapAsAUV2 : public ausdk::AUBase,
   {
     return false;
   }
-  void SetBypassEffect(bool bypass){};
+  void SetBypassEffect(bool bypass) {};
 
   // --------------- internals
 
@@ -544,7 +544,8 @@ class WrapAsAUV2 : public ausdk::AUBase,
 #ifdef DUAL_SCHEDULING_ENABLED
   bool _midi_dualscheduling_mode = false;
 #endif
-  std::map<uint32_t, std::unique_ptr<Clap::AUv2::Parameter>> _parametertree;
+  std::vector<std::unique_ptr<Clap::AUv2::Parameter>> _parameterList;
+  std::unordered_map<uint32_t, Clap::AUv2::Parameter*> _parameterMap;
   Clumps _clumps;
 
   CFStringRef _current_program_name = 0;

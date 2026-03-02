@@ -1,5 +1,6 @@
 #include "generated_entrypoints.hxx"
 #include "detail/auv2/process.h"
+#include "clapwrapper/auv2.h"
 #include <set>
 
 extern bool fillAudioUnitCocoaView(AudioUnitCocoaViewInfo* viewInfo, std::shared_ptr<Clap::Plugin>);
@@ -346,42 +347,69 @@ void WrapAsAUV2::setupParameters(const clap_plugin_t* plugin, const clap_plugin_
   auto guarantee_mainthread = _plugin->AlwaysMainThread();
   // creating parameters.
 
+  _parameterMap.clear();
+  _parameterList.clear();
   _clumps.reset();
-  auto* p = _plugin->_ext._params;
-  if (p)
+
+  auto* ext_params = _plugin->_ext._params;
+  auto* ext_params_auv2 =
+      (clap_plugin_params_as_auv2_t*)plugin->get_extension(plugin, CLAP_PLUGIN_PARAMS_AS_AUV2);
+
+  if (ext_params)
   {
-    uint32_t numparams = p->count(_plugin->_plugin);
-    clap_param_info_t paraminfo;
+    uint32_t numparams = ext_params->count(_plugin->_plugin);
     for (uint32_t i = 0; i < numparams; ++i)
     {
-      if (p->get_info(_plugin->_plugin, i, &paraminfo))
+      clap_param_info_t param_info;
+      if (ext_params->get_info(_plugin->_plugin, i, &param_info))
       {
-        double result;
-        if (p->get_value(_plugin->_plugin, paraminfo.id, &result))
+        uint32_t auv2_id;
+        if (ext_params_auv2 && ext_params_auv2->get_param_id &&
+            !ext_params_auv2->get_param_id(_plugin->_plugin, param_info.id, &auv2_id))
         {
-          // If the parametre is already created, just restate its info
-          auto piter = _parametertree.find(paraminfo.id);
-          if (piter == _parametertree.end())
-          {
-            // creating the mapping object and insert it into the tree
-            // this will also create Clumps if necessary
-            _parametertree[paraminfo.id] =
-                std::make_unique<Clap::AUv2::Parameter>(_plugin->_plugin, p, paraminfo);
-          }
-          else
-          {
-            piter->second->updateInfo(_plugin->_plugin, p, paraminfo);
-          }
-          Globals()->SetParameter(paraminfo.id, result);
+          auv2_id = param_info.id;
+        }
+
+        auto param = std::make_unique<Clap::AUv2::Parameter>(_plugin->_plugin, ext_params, param_info);
+        _parameterMap[auv2_id] = param.get();
+        _parameterList.push_back(std::move(param));
+
+        double param_value;
+        if (ext_params->get_value(_plugin->_plugin, param_info.id, &param_value))
+        {
+          Globals()->SetParameter(auv2_id, param_value);
         }
       }
     }
+
+    if (ext_params_auv2)
+    {
+      std::sort(_parameterList.begin(), _parameterList.end(),
+                [](const auto& a, const auto& b)
+                {
+                  uint32_t version_a, version_b;
+                  if (!ext_params_auv2->get_param_version(a->_plugin->_plugin, a->info().id, &version_a))
+                    version_a = 0;
+                  if (!ext_params_auv2->get_param_version(b->_plugin->_plugin, b->info().id, &version_b))
+                    version_b = 0;
+
+                  return version_a < version_b;
+                });
+    }
   }
+}
 }
 
 OSStatus WrapAsAUV2::GetParameterList(AudioUnitScope inScope, AudioUnitParameterID* outParameterList,
                                       UInt32& outNumParameters)
 {
+  if (inScope == kAudioUnitScope_Global)
+  {
+    outNumParameters = _parameterList.size();
+    for (auto i = 0; i < outNumParameters; ++i) outParameterList[i] = _parameterList[i]->auv2_id();
+    return noErr;
+  }
+
   return AUBase::GetParameterList(inScope, outParameterList, outNumParameters);
 }
 
@@ -408,7 +436,7 @@ void WrapAsAUV2::param_rescan(clap_param_rescan_flags flags)
   myEvent.mEventType = kAudioUnitEvent_PropertyChange;
 
   {
-    for (auto& i : _parametertree)
+    for (auto& i : _parameterMap)
     {
       *of << "Considering param" << std::endl;
       if (i.second->info().flags & CLAP_PARAM_IS_AUTOMATABLE)
@@ -444,27 +472,35 @@ OSStatus WrapAsAUV2::GetParameterInfo(AudioUnitScope inScope, AudioUnitParameter
   // const uint64_t stdflag = kAudioUnitParameterFlag_IsReadable | kAudioUnitParameterFlag_IsWritable;
   if (inScope == kAudioUnitScope_Global)
   {
-    auto pi = _parametertree.find(inParameterID);
-    if (pi != _parametertree.end())
+    auto pi = _parameterMap.find(inParameterID);
+    if (pi != _parameterMap.end())
     {
       auto f = pi->second.get();
-      const auto& info = f->info();
+      if (f->isTombstone())
+      {
+        // this is a tombstone parameter, we need to return something but it shouldn't be automatable or visible
+        memset(outParameterInfo.name, 0, sizeof(outParameterInfo.name));
+        outParameterInfo.flags = f->AudioUnitFlags();
+        outParameterInfo.cfNameString = nullptr;
+        outParameterInfo.minValue = 0.0;
+        outParameterInfo.maxValue = 0.0;
+        outParameterInfo.defaultValue = 0.0;
+        return noErr;
+      }
 
-      outParameterInfo.flags = f->AudioUnitFlags();
+      const auto& info = f->info();
 
       // according to the documentation, the name field should be zeroed. In fact, AULab does display anything then.
       // strcpy(outParameterInfo.name, info.name);
       memset(outParameterInfo.name, 0, sizeof(outParameterInfo.name));
 
       CFRetain(f->CFString());
+
+      outParameterInfo.flags = f->AudioUnitFlags();
       outParameterInfo.cfNameString = f->CFString();
       outParameterInfo.minValue = info.min_value;
       outParameterInfo.maxValue = info.max_value;
-      outParameterInfo.defaultValue = info.min_value;
-      if (info.min_value < 0.0)
-      {
-        outParameterInfo.defaultValue = 0.0;
-      }
+      outParameterInfo.defaultValue = info.default_value;
 
       // adding the clump information
       if (info.module[0] != 0)
@@ -488,14 +524,18 @@ OSStatus WrapAsAUV2::SetParameter(AudioUnitParameterID inID, AudioUnitScope inSc
     {
       // a parameter has been set.
       // _processAdapter->addParameterEvent(inID,inValue,inBufferOffsetInFrames);
-      auto p = _parametertree.find(inID);
-      if (p != _parametertree.end())
+      auto p = _parameterMap.find(inID);
+      if (p != _parameterMap.end())
       {
-        auto& param = p->second.get()->info();
-        _processAdapter->addParameterEvent(param, inValue, inBufferOffsetInFrames);
+        auto& param = p->second.get();
+        if (!param->isTombstone())
+        {
+          _processAdapter->addParameterEvent(param->info(), inValue, inBufferOffsetInFrames);
+        }
       }
     }
   }
+
   return AUBase::SetParameter(inID, inScope, inElement, inValue, inBufferOffsetInFrames);
 }
 
@@ -1213,7 +1253,7 @@ OSStatus WrapAsAUV2::RestoreState(CFPropertyListRef plist)
   const void* pData = CFDictionaryGetValue(tDict, CFSTR(kAUPresetDataKey));
   if (!pData || CFGetTypeID(CFTypeRef(pData)) != CFDataGetTypeID()) return -1;
 
-    /*
+  /*
    * In the read side I fall through to default, whereas in the write
    * side I use an 'else' on the set of stream formats. This means
    * you at least try in case saved with an older wrapper version

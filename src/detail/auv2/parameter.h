@@ -35,8 +35,13 @@ class Parameter
 {
  public:
   Parameter(const clap_plugin_t* plugin, const clap_plugin_params_t* clap_param_ext,
-            const clap_param_info_t& clap_param);
+            const clap_param_info_t& clap_param, const uint32_t auv2_id);
   ~Parameter();
+
+  const uint32_t auv2_id() const
+  {
+    return _auv2_id;
+  }
   const clap_param_info_t& info() const
   {
     return _info;
@@ -57,6 +62,7 @@ class Parameter
   clap_param_info_t _info;
   CFStringRef _cfstring = nullptr;
   AudioUnitParameterOptions _flags;
+  uint32_t _auv2_id;
 };
 
 }  // namespace Clap::AUv2
